@@ -1,28 +1,16 @@
 #include <algorithm>
 #include <cmath>
-#include <iostream>
 #include <map>
 #include <set>
 #include <string>
 #include <utility>
 #include <vector>
+#include <iostream>
 
 using namespace std;
 
+/* Подставьте вашу реализацию класса SearchServer сюда */
 const int MAX_RESULT_DOCUMENT_COUNT = 5;
-
-string ReadLine() {
-    string s;
-    getline(cin, s);
-    return s;
-}
-
-int ReadLineWithNumber() {
-    int result;
-    cin >> result;
-    ReadLine();
-    return result;
-}
 
 vector<string> SplitIntoWords(const string &text) {
     vector<string> words;
@@ -95,7 +83,8 @@ public:
         return matched_documents;
     }
 
-    vector<Document> FindTopDocuments(const string &raw_query, const DocumentStatus& search_status=DocumentStatus::ACTUAL) const {
+    vector<Document>
+    FindTopDocuments(const string &raw_query, const DocumentStatus &search_status = DocumentStatus::ACTUAL) const {
         return FindTopDocuments(raw_query,
                                 [search_status](int document_id, DocumentStatus status,
                                                 int rating) {
@@ -202,6 +191,7 @@ private:
         return query;
     }
 
+    // Existence required
     double ComputeWordInverseDocumentFreq(const string &word) const {
         return log(GetDocumentCount() * 1.0 / word_to_document_freqs_.at(word).size());
     }
@@ -239,33 +229,461 @@ private:
         return matched_documents;
     }
 };
-
-void PrintDocument(const Document &document) {
-    cout << "{ "s
-         << "document_id = "s << document.id << ", "s
-         << "relevance = "s << document.relevance << ", "s
-         << "rating = "s << document.rating
-         << " }"s << endl;
+/*
+   Подставьте сюда вашу реализацию макросов
+   ASSERT, ASSERT_EQUAL, ASSERT_EQUAL_HINT, ASSERT_HINT и RUN_TEST
+*/
+template<typename El1, typename El2>
+ostream &operator<<(ostream &out, const pair<El1, El2> &container) {
+    return out << container.first << ": " << container.second;
 }
 
+template<typename Element>
+void Print(ostream &out, const Element &container) {
+    bool is_first = true;
+    for (const auto &element: container) {
+        if (!is_first) {
+            out << ", "s;
+        }
+        is_first = false;
+        out << element;
+    }
+}
+
+template<typename Element>
+ostream &operator<<(ostream &out, const vector<Element> &container) {
+    out << "["s;
+    Print(out, container);
+    out << "]"s;
+    return out;
+}
+
+template<typename Element>
+ostream &operator<<(ostream &out, const set<Element> &container) {
+    out << "{"s;
+    Print(out, container);
+    out << "}"s;
+    return out;
+}
+
+template<typename Key, typename Value>
+ostream &operator<<(ostream &out, const map<Key, Value> &container) {
+    out << "{"s;
+    Print(out, container);
+    out << "}"s;
+    return out;
+}
+
+template <typename T, typename U>
+void AssertEqualImpl(const T& t, const U& u, const string& t_str, const string& u_str, const string& file,
+                     const string& func, unsigned line, const string& hint) {
+    if (t != u) {
+        cerr << boolalpha;
+        cerr << file << "("s << line << "): "s << func << ": "s;
+        cerr << "ASSERT_EQUAL("s << t_str << ", "s << u_str << ") failed: "s;
+        cerr << t << " != "s << u << "."s;
+        if (!hint.empty()) {
+            cerr << " Hint: "s << hint;
+        }
+        cerr << endl;
+        abort();
+    }
+}
+
+#define ASSERT_EQUAL(a, b) AssertEqualImpl((a), (b), #a, #b, __FILE__, __FUNCTION__, __LINE__, ""s)
+
+#define ASSERT_EQUAL_HINT(a, b, hint) AssertEqualImpl((a), (b), #a, #b, __FILE__, __FUNCTION__, __LINE__, (hint))
+
+void AssertImpl(bool value, const string& expr_str, const string& file, const string& func, unsigned line,
+                const string& hint) {
+    if (!value) {
+        cerr << file << "("s << line << "): "s << func << ": "s;
+        cerr << "ASSERT("s << expr_str << ") failed."s;
+        if (!hint.empty()) {
+            cerr << " Hint: "s << hint;
+        }
+        cerr << endl;
+        abort();
+    }
+}
+
+#define ASSERT(expr) AssertImpl(!!(expr), #expr, __FILE__, __FUNCTION__, __LINE__, ""s)
+
+#define ASSERT_HINT(expr, hint) AssertImpl(!!(expr), #expr, __FILE__, __FUNCTION__, __LINE__, (hint))
+
+template <typename F>
+void RunTestImpl(const F& f, const string& func) {
+    f();
+    cerr << func << " OK"s << endl;
+}
+
+#define RUN_TEST(func) RunTestImpl((func) , #func) // напишите недостающий код
+// -------- Начало модульных тестов поисковой системы ----------
+
+// Тест проверяет, что поисковая система исключает стоп-слова при добавлении документов
+void TestExcludeStopWordsFromAddedDocumentContent() {
+    const int doc_id = 42;
+    const string content = "cat in the city"s;
+    const vector<int> ratings = {1, 2, 3};
+    {
+        SearchServer server;
+        server.AddDocument(doc_id, content, DocumentStatus::ACTUAL, ratings);
+        const auto found_docs = server.FindTopDocuments("in"s);
+        ASSERT_EQUAL(found_docs.size(), 1u);
+        const Document& doc0 = found_docs[0];
+        ASSERT_EQUAL(doc0.id, doc_id);
+    }
+
+    {
+        SearchServer server;
+        server.SetStopWords("in the"s);
+        server.AddDocument(doc_id, content, DocumentStatus::ACTUAL, ratings);
+        ASSERT_HINT(server.FindTopDocuments("in"s).empty(),
+                    "Stop words must be excluded from documents"s);
+    }
+}
+
+// Тест проверяет добавление документов. Поисковому по запросу, который содержит слова из документа.
+void TestAddDocumentAndSearch() {
+    const int doc_id_1 = 40;
+    const string content_1 = "cat in the city"s;
+    const int doc_id_2 = 41;
+    const string content_2 = "maxim writes the code"s;
+    const vector<int> ratings = {1, 2, 3};
+
+    {
+        SearchServer server;
+        server.SetStopWords("in the"s);
+        server.AddDocument(doc_id_1, content_1, DocumentStatus::ACTUAL, ratings);
+        server.AddDocument(doc_id_2, content_2, DocumentStatus::ACTUAL, ratings);
+
+        const auto found_docs = server.FindTopDocuments("maxim"s);
+        ASSERT_EQUAL(found_docs[0].id, doc_id_2);
+        ASSERT_EQUAL(found_docs.size(), 1);
+    }
+
+    {
+        SearchServer server;
+        server.SetStopWords("in the"s);
+        server.AddDocument(doc_id_1, content_1, DocumentStatus::ACTUAL, ratings);
+        server.AddDocument(doc_id_2, content_2, DocumentStatus::ACTUAL, ratings);
+
+        ASSERT(server.FindTopDocuments("dog"s).empty());
+    }
+}
+
+// Поддержка минус-слов. Документы, содержащие минус-слова поискового запроса, не должны включаться в результаты поиска.
+void TestStopWords() {
+    const int doc_id_1 = 40;
+    const string content_1 = "maxim create code in unit test"s;
+    const int doc_id_2 = 41;
+    const string content_2 = "dima writes the test code"s;
+    const vector<int> ratings = {1, 2, 3};
+
+    {
+        SearchServer server;
+        server.SetStopWords("in the"s);
+        server.AddDocument(doc_id_1, content_1, DocumentStatus::ACTUAL, ratings);
+        server.AddDocument(doc_id_2, content_2, DocumentStatus::ACTUAL, ratings);
+
+        const auto found_docs = server.FindTopDocuments("-maxim code test"s);
+        ASSERT_EQUAL(found_docs[0].id, doc_id_2);
+        ASSERT_EQUAL(found_docs.size(), 1);
+    }
+
+    {
+        SearchServer server;
+        server.SetStopWords("in the"s);
+        server.AddDocument(doc_id_1, content_1, DocumentStatus::ACTUAL, ratings);
+        server.AddDocument(doc_id_2, content_2, DocumentStatus::ACTUAL, ratings);
+
+        const auto found_docs = server.FindTopDocuments("maxim -code test"s);
+        ASSERT(found_docs.empty());
+    }
+}
+
+// Тест матчинга документов.
+void TestMatchingDocuments() {
+    const int doc_id_1 = 40;
+    const string content_1 = "maxim create code in unit test"s;
+    const int doc_id_2 = 41;
+    const string content_2 = "dima writes the test code"s;
+    const vector<int> ratings = {1, 2, 3};
+
+    {
+        SearchServer server;
+        server.SetStopWords("in the"s);
+        server.AddDocument(doc_id_1, content_1, DocumentStatus::ACTUAL, ratings);
+        server.AddDocument(doc_id_2, content_2, DocumentStatus::ACTUAL, ratings);
+
+        const auto found_docs = server.FindTopDocuments("code test"s);
+        ASSERT_EQUAL(found_docs[0].id, doc_id_1);
+        ASSERT_EQUAL(found_docs[1].id, doc_id_2);
+        ASSERT_EQUAL(found_docs.size(), 2);
+    }
+
+    {
+        SearchServer server;
+        server.SetStopWords("in the"s);
+        server.AddDocument(doc_id_1, content_1, DocumentStatus::ACTUAL, ratings);
+        server.AddDocument(doc_id_2, content_2, DocumentStatus::ACTUAL, ratings);
+
+        const auto found_docs = server.FindTopDocuments("maxim -code test"s);
+        ASSERT(found_docs.empty());
+    }
+
+    {
+        SearchServer server;
+        server.SetStopWords("in the"s);
+        server.AddDocument(doc_id_1, content_1, DocumentStatus::ACTUAL, ratings);
+        server.AddDocument(doc_id_2, content_2, DocumentStatus::ACTUAL, ratings);
+
+        const auto found_docs = server.MatchDocument("-maxim code test"s, 41);
+        const vector<string> result = {"code"s, "test"s};
+        ASSERT_EQUAL(get<0>(found_docs), result);
+        ASSERT_EQUAL(get<0>(found_docs).size(), 2);
+    }
+
+    {
+        SearchServer server;
+        server.SetStopWords("in the"s);
+        server.AddDocument(doc_id_1, content_1, DocumentStatus::ACTUAL, ratings);
+        server.AddDocument(doc_id_2, content_2, DocumentStatus::ACTUAL, ratings);
+
+        const auto found_docs = server.FindTopDocuments("-maxim code test"s);
+        ASSERT_EQUAL(found_docs[0].id, doc_id_2);
+        ASSERT_EQUAL(found_docs.size(), 1);
+    }
+}
+
+// Сортировка найденных документов по релевантности
+void TestSortRelevanceDocuments() {
+    const int doc_id_1 = 40;
+    const string content_1 = "maxim create code in unit test"s;
+    const vector<int> ratings_1 = {1, 2, 3};
+    const int doc_id_2 = 41;
+    const string content_2 = "dima writes the test code"s;
+    const vector<int> ratings_2 = {2, 3, 4};
+
+    {
+        SearchServer server;
+        server.SetStopWords("in the"s);
+        server.AddDocument(doc_id_1, content_1, DocumentStatus::ACTUAL, ratings_1);
+        server.AddDocument(doc_id_2, content_2, DocumentStatus::ACTUAL, ratings_2);
+
+        const auto found_docs = server.FindTopDocuments("maxim code"s);
+        const auto relevance = 0.138629;
+
+        ASSERT_EQUAL(found_docs[0].id, doc_id_1);
+        ASSERT_EQUAL(found_docs[1].id, doc_id_2);
+        ASSERT(found_docs[1].relevance < relevance);
+    }
+
+    {
+        SearchServer server;
+        server.SetStopWords("in the"s);
+        server.AddDocument(doc_id_1, content_1, DocumentStatus::ACTUAL, ratings_1);
+        server.AddDocument(doc_id_2, content_2, DocumentStatus::ACTUAL, ratings_2);
+
+        const auto found_docs = server.FindTopDocuments("dima create code"s);
+        const auto relevance = 0.173287;
+
+        ASSERT_EQUAL(found_docs[0].id, doc_id_2);
+        ASSERT_EQUAL(found_docs[1].id, doc_id_1);
+        ASSERT(found_docs[1].relevance < relevance);
+    }
+}
+
+// Тест вычисления рейтинга документов
+void TestRatingDocuments() {
+    const int doc_id_1 = 40;
+    const string content_1 = "maxim create code in unit test"s;
+    const vector<int> ratings_1 = {1};
+    const int doc_id_2 = 41;
+    const string content_2 = "dima writes the test code"s;
+    const vector<int> ratings_2 = {2, 3, 4};
+    const int doc_id_3 = 42;
+    const string content_3 = "dima writes the test code"s;
+    const vector<int> ratings_3 = {5, 8, 9};
+
+    {
+        SearchServer server;
+        server.SetStopWords("in the"s);
+        server.AddDocument(doc_id_1, content_1, DocumentStatus::ACTUAL, ratings_1);
+        server.AddDocument(doc_id_2, content_2, DocumentStatus::ACTUAL, ratings_2);
+
+        const auto found_docs = server.FindTopDocuments("maxim code"s);
+        ASSERT_EQUAL(found_docs[0].rating, 1);
+        ASSERT(found_docs[1].rating == 3);
+    }
+
+    {
+        SearchServer server;
+        server.SetStopWords("in the"s);
+        server.AddDocument(doc_id_1, content_1, DocumentStatus::ACTUAL, ratings_1);
+        server.AddDocument(doc_id_2, content_2, DocumentStatus::ACTUAL, ratings_2);
+        server.AddDocument(doc_id_3, content_3, DocumentStatus::ACTUAL, ratings_3);
+
+        const auto found_docs = server.FindTopDocuments("dima create code"s);
+        ASSERT(found_docs[0].rating == 1);
+        ASSERT_HINT(found_docs[1].rating == 7, "No Rating test accessed"s);
+        ASSERT(found_docs[2].rating == 3);
+    }
+}
+
+// Тест фильтрации результатов поиска с использованием предиката
+void TestFiltersDocuments() {
+    const int doc_id_1 = 40;
+    const string content_1 = "maxim create code in unit test"s;
+    const vector<int> ratings_1 = {1};
+    const int doc_id_2 = 41;
+    const string content_2 = "dima writes the test code"s;
+    const vector<int> ratings_2 = {2, 3, 4};
+    const int doc_id_3 = 42;
+    const string content_3 = "dima writes the test code"s;
+    const vector<int> ratings_3 = {5, 8, 9};
+
+    {
+        SearchServer server;
+        server.SetStopWords("in the"s);
+        server.AddDocument(doc_id_1, content_1, DocumentStatus::ACTUAL, ratings_1);
+        server.AddDocument(doc_id_2, content_2, DocumentStatus::ACTUAL, ratings_2);
+
+        const auto found_docs = server.FindTopDocuments("maxim code"s,
+                                                        [](int document_id, DocumentStatus status, int rating) {
+                                                            return document_id % 2 == 0;
+                                                        });
+        ASSERT_EQUAL(found_docs[0].id, doc_id_1);
+        ASSERT_EQUAL(found_docs.size(), 1);
+    }
+
+    {
+        SearchServer server;
+        server.SetStopWords("in the"s);
+        server.AddDocument(doc_id_1, content_1, DocumentStatus::ACTUAL, ratings_1);
+        server.AddDocument(doc_id_2, content_2, DocumentStatus::ACTUAL, ratings_2);
+        server.AddDocument(doc_id_3, content_3, DocumentStatus::ACTUAL, ratings_3);
+
+        const auto found_docs = server.FindTopDocuments("maxim code"s,
+                                                        [](int document_id, DocumentStatus status, int rating) {
+                                                            return rating > 2;
+                                                        });
+
+        ASSERT_EQUAL(found_docs[0].id, doc_id_3);
+        ASSERT(found_docs[0].rating > 2);
+
+        ASSERT_EQUAL(found_docs[1].id, doc_id_2);
+        ASSERT(found_docs[1].rating > 2);
+
+        ASSERT(found_docs.size() == 2);
+    }
+}
+
+// Тест поиска документов, имеющих заданный статус
+void TestSearchDocumentsIsStatus() {
+    const int doc_id_1 = 40;
+    const string content_1 = "maxim create code in unit test"s;
+    const vector<int> ratings_1 = {1};
+    const int doc_id_2 = 41;
+    const string content_2 = "dima writes the test code"s;
+    const vector<int> ratings_2 = {2, 3, 4};
+    const int doc_id_3 = 42;
+    const string content_3 = "dima writes the test code"s;
+    const vector<int> ratings_3 = {5, 8, 9};
+
+    {
+        SearchServer server;
+        server.SetStopWords("in the"s);
+        server.AddDocument(doc_id_1, content_1, DocumentStatus::ACTUAL, ratings_1);
+        server.AddDocument(doc_id_2, content_2, DocumentStatus::BANNED, ratings_2);
+
+        const auto found_docs = server.FindTopDocuments("maxim code"s, DocumentStatus::BANNED);
+        ASSERT_EQUAL(found_docs[0].id, doc_id_2);
+        ASSERT(found_docs.size() == 1);
+    }
+
+    {
+        SearchServer server;
+        server.SetStopWords("in the"s);
+        server.AddDocument(doc_id_1, content_1, DocumentStatus::IRRELEVANT, ratings_1);
+        server.AddDocument(doc_id_2, content_2, DocumentStatus::BANNED, ratings_2);
+        server.AddDocument(doc_id_3, content_3, DocumentStatus::IRRELEVANT, ratings_3);
+
+        const auto found_docs = server.FindTopDocuments("maxim code"s, DocumentStatus::IRRELEVANT);
+        ASSERT_EQUAL(found_docs[0].id, doc_id_1);
+        ASSERT_EQUAL(found_docs[1].id, doc_id_3);
+        ASSERT(found_docs.size() == 2);
+    }
+
+    {
+        SearchServer server;
+        server.SetStopWords("in the"s);
+        server.AddDocument(doc_id_1, content_1, DocumentStatus::IRRELEVANT, ratings_1);
+        server.AddDocument(doc_id_2, content_2, DocumentStatus::ACTUAL, ratings_2);
+
+        const auto found_docs = server.MatchDocument("code test"s, 41);
+        ASSERT(get<1>(found_docs) == DocumentStatus::ACTUAL);
+    }
+
+    {
+        SearchServer server;
+        server.SetStopWords("in the"s);
+        server.AddDocument(doc_id_1, content_1, DocumentStatus::IRRELEVANT, ratings_1);
+        server.AddDocument(doc_id_2, content_2, DocumentStatus::ACTUAL, ratings_2);
+
+        const auto found_docs = server.MatchDocument("code test"s, 40);
+        ASSERT(get<1>(found_docs) == DocumentStatus::IRRELEVANT);
+    }
+}
+
+// Тест корректности вычисления релевантности найденных документов
+void TestCorrectRelevanceFindDocuments() {
+    const int doc_id_1 = 40;
+    const string content_1 = "белый кот и модный ошейник"s;
+    const vector<int> ratings_1 = {1, 2, 3};
+    const int doc_id_2 = 41;
+    const string content_2 = "пушистый кот пушистый хвост"s;
+    const vector<int> ratings_2 = {2, 3, 4};
+    const int doc_id_3 = 42;
+    const string content_3 = "ухоженный пёс выразительные глаза"s;
+    const vector<int> ratings_3 = {5, 8, 9};
+
+    {
+        SearchServer server;
+        server.SetStopWords("и в на"s);
+        server.AddDocument(doc_id_1, content_1, DocumentStatus::ACTUAL, ratings_1);
+        server.AddDocument(doc_id_2, content_2, DocumentStatus::ACTUAL, ratings_2);
+        server.AddDocument(doc_id_3, content_3, DocumentStatus::ACTUAL, ratings_3);
+
+        const auto found_docs = server.FindTopDocuments("пушистый ухоженный кот"s);
+        const auto relevance_0 = 0.65067242136109593176;
+        const auto relevance_1 = 0.27465307216702744553;
+        const auto relevance_2 = 0.10136627702704109621;
+        ASSERT(found_docs[0].relevance == relevance_0);
+        ASSERT(found_docs[1].relevance == relevance_1);
+        ASSERT(found_docs[2].relevance == relevance_2);
+    }
+}
+
+// Функция TestSearchServer является точкой входа для запуска тестов
+void TestSearchServer() {
+    RUN_TEST(TestExcludeStopWordsFromAddedDocumentContent);
+    RUN_TEST(TestAddDocumentAndSearch);
+    RUN_TEST(TestStopWords);
+    RUN_TEST(TestAddDocumentAndSearch);
+    RUN_TEST(TestAddDocumentAndSearch);
+    RUN_TEST(TestMatchingDocuments);
+    RUN_TEST(TestSortRelevanceDocuments);
+    RUN_TEST(TestRatingDocuments);
+    RUN_TEST(TestFiltersDocuments);
+    RUN_TEST(TestSearchDocumentsIsStatus);
+    RUN_TEST(TestCorrectRelevanceFindDocuments);
+}
+
+// --------- Окончание модульных тестов поисковой системы -----------
+
 int main() {
-    SearchServer search_server;
-    search_server.SetStopWords("и в на"s);
-    search_server.AddDocument(0, "белый кот и модный ошейник"s,        DocumentStatus::ACTUAL, {8, -3});
-    search_server.AddDocument(1, "пушистый кот пушистый хвост"s,       DocumentStatus::ACTUAL, {7, 2, 7});
-    search_server.AddDocument(2, "ухоженный пёс выразительные глаза"s, DocumentStatus::ACTUAL, {5, -12, 2, 1});
-    search_server.AddDocument(3, "ухоженный скворец евгений"s,         DocumentStatus::BANNED, {9});
-    cout << "ACTUAL by default:"s << endl;
-    for (const Document& document : search_server.FindTopDocuments("пушистый ухоженный кот"s)) {
-        PrintDocument(document);
-    }
-    cout << "BANNED:"s << endl;
-    for (const Document& document : search_server.FindTopDocuments("пушистый ухоженный кот"s, DocumentStatus::BANNED)) {
-        PrintDocument(document);
-    }
-    cout << "Even ids:"s << endl;
-    for (const Document& document : search_server.FindTopDocuments("пушистый ухоженный кот"s, [](int document_id, DocumentStatus status, int rating) { return document_id % 2 == 0; })) {
-        PrintDocument(document);
-    }
-    return 0;
+    TestSearchServer();
+    // Если вы видите эту строку, значит все тесты прошли успешно
+    cout << "Search server testing finished"s << endl;
 }
