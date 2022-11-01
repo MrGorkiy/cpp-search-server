@@ -11,6 +11,7 @@ using namespace std;
 
 /* Подставьте вашу реализацию класса SearchServer сюда */
 const int MAX_RESULT_DOCUMENT_COUNT = 5;
+constexpr double comparison_error = 1e-6;
 
 vector<string> SplitIntoWords(const string &text) {
     vector<string> words;
@@ -71,7 +72,7 @@ public:
 
         sort(matched_documents.begin(), matched_documents.end(),
              [](const Document &lhs, const Document &rhs) {
-                 if (abs(lhs.relevance - rhs.relevance) < 1e-6) {
+                 if (abs(lhs.relevance - rhs.relevance) < comparison_error) {
                      return lhs.rating > rhs.rating;
                  } else {
                      return lhs.relevance > rhs.relevance;
@@ -656,12 +657,12 @@ void TestCorrectRelevanceFindDocuments() {
         server.AddDocument(doc_id_3, content_3, DocumentStatus::ACTUAL, ratings_3);
 
         const auto found_docs = server.FindTopDocuments("пушистый ухоженный кот"s);
-        const auto relevance_0 = 0.65067242136109593176;
-        const auto relevance_1 = 0.27465307216702744553;
-        const auto relevance_2 = 0.10136627702704109621;
-        ASSERT(found_docs[0].relevance == relevance_0);
-        ASSERT(found_docs[1].relevance == relevance_1);
-        ASSERT(found_docs[2].relevance == relevance_2);
+        const auto relevance_0 = 0.650672;
+        const auto relevance_1 = 0.274653;
+        const auto relevance_2 = 0.101366;
+        ASSERT(found_docs[0].relevance - relevance_0 < comparison_error);
+        ASSERT(found_docs[1].relevance - relevance_1 < comparison_error);
+        ASSERT(found_docs[2].relevance - relevance_2 < comparison_error);
     }
 }
 
