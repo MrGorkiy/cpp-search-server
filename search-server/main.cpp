@@ -82,7 +82,7 @@ public:
     template<typename StringContainer>
     explicit SearchServer(const StringContainer &stop_words)
             : stop_words_(MakeUniqueNonEmptyStrings(stop_words)) {
-        for (auto word: MakeUniqueNonEmptyStrings(stop_words)) {
+        for (auto word: stop_words) {
             if (!IsValidWord(word)) {
                 throw invalid_argument("Stop-words contain invalid characters in create SearchServer");
             }
@@ -92,14 +92,14 @@ public:
     explicit SearchServer(const string &stop_words_text)
             : SearchServer(
             SplitIntoWords(stop_words_text)) {
-        if (!IsValidWord(stop_words_text)) {
-            throw invalid_argument("Stop-words contain invalid characters in create SearchServer");
-        }
     }
 
     void AddDocument(int document_id, const string &document, DocumentStatus status, const vector<int> &ratings) {
         if (document_id < 0 || documents_.count(document_id) > 0) {
             throw invalid_argument("A document with a negative ID or the ID of an existing document in AddDocument()");
+        }
+        if (document.empty()) {
+            throw invalid_argument("Can't add empty document"s);
         }
         if (!IsValidWord(document)) {
             throw invalid_argument("Stop-words contain invalid characters in AddDocument()");
@@ -110,13 +110,11 @@ public:
             word_to_document_freqs_[word][document_id] += inv_word_count;
         }
         documents_.emplace(document_id, DocumentData{ComputeAverageRating(ratings), status});
+        documents_id_.push_back(document_id);
     }
 
     template<typename DocumentPredicate>
     vector<Document> FindTopDocuments(const string &raw_query, DocumentPredicate document_predicate) const {
-        if (!IsValidWord(raw_query)) {
-            throw invalid_argument("Stop-words contain invalid characters in FindTopDocuments()");
-        }
         const Query query = ParseQuery(raw_query);
         auto matched_documents = FindAllDocuments(query, document_predicate);
 
@@ -150,25 +148,13 @@ public:
     }
 
     int GetDocumentId(int index) {
-        if (index < 0 || GetDocumentCount() < index - 1) {
+        if (index < 0 || documents_id_.size() < index - 1) {
             throw out_of_range("The index of the transmitted document is out of the acceptable range");
         }
-        int index_count = 0;
-        int result = 0;
-        for (const auto &[id, value]: documents_) {
-            if (index - 1 == index_count) {
-                result = id;
-                break;
-            }
-            ++index_count;
-        }
-        return result;
+        return documents_id_.at(index);
     }
 
     tuple<vector<string>, DocumentStatus> MatchDocument(const string &raw_query, int document_id) const {
-        if (!IsValidWord(raw_query)) {
-            throw invalid_argument("Stop-words contain invalid characters in MatchDocument()");
-        }
         const Query query = ParseQuery(raw_query);
         vector<string> matched_words;
         for (const string &word: query.plus_words) {
@@ -199,6 +185,7 @@ private:
     const set<string> stop_words_; // множество стоп слов
     map<string, map<int, double>> word_to_document_freqs_; // словарь слов : <слово, <document_id, term_freq>>
     map<int, DocumentData> documents_; // словарь документов <document_id, данные>
+    vector<int> documents_id_; // множество ids документов на сервере
 
     bool IsStopWord(const string &word) const {
         return stop_words_.count(word) > 0;
