@@ -11,7 +11,7 @@ void RemoveDuplicates(SearchServer &search_server) {
         for (auto &[doc, id_and_idf]: search_server.GetWordFrequencies(document_id)) {
             words.insert(doc);
         }
-        if (!word_to_document_freqs.count(words)) {
+        if (word_to_document_freqs.count(words) == 0) {
             word_to_document_freqs[words] = document_id;
         } else if (document_id > word_to_document_freqs[words]) {
             id_delete_doc.insert(document_id);

@@ -42,7 +42,7 @@ public:
     std::tuple<std::vector<std::string>, DocumentStatus> MatchDocument(const std::string &raw_query,
                                                         int document_id) const;
     // Метод получения частот слов по id документа.
-    std::map<std::string, double> GetWordFrequencies(int document_id) const;
+    const std::map<std::string, double>& GetWordFrequencies(int document_id) const;
 
 private:
     // Структура хранения документов

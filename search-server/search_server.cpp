@@ -3,8 +3,7 @@
 #include <cmath>
 
 SearchServer::SearchServer(const std::string &stop_words_text)
-        : SearchServer::SearchServer(SplitIntoWords(stop_words_text))
-{
+        : SearchServer::SearchServer(SplitIntoWords(stop_words_text)) {
 }
 
 std::set<int>::iterator SearchServer::begin() const {
@@ -17,7 +16,7 @@ std::set<int>::iterator SearchServer::end() const {
 
 // Добавление нового документа.
 void SearchServer::AddDocument(int document_id, const std::string &document, DocumentStatus status,
-                 const std::vector<int> &ratings) {
+                               const std::vector<int> &ratings) {
     if ((document_id < 0) || (documents_.count(document_id) > 0)) {
         throw std::invalid_argument("Invalid document_id");
     }
@@ -37,12 +36,9 @@ void SearchServer::RemoveDocument(int document_id) {
     if (document_ids_.count(document_id) == 0) {
         return;
     }
-
-    for (auto& [word, id_and_idf]: word_to_document_freqs_) {
-        auto find_word = id_and_idf.find(document_id);
-        if (find_word != id_and_idf.end()) {
-            word_to_document_freqs_.at(word).erase(document_id);
-        }
+    std::map<std::string, double> words_doc = document_to_word_freqs_.at(document_id);
+    for (auto &[word, idf]: words_doc) {
+        word_to_document_freqs_.at(word).erase(document_id);
     }
     documents_.erase(document_id);
     document_ids_.erase(document_id);
@@ -63,9 +59,10 @@ std::vector<Document> SearchServer::FindTopDocuments(const std::string &raw_quer
 }
 
 // Метод получения частот слов по id документа.
-std::map<std::string , double> SearchServer::GetWordFrequencies(int document_id) const {
+const std::map<std::string, double> &SearchServer::GetWordFrequencies(int document_id) const {
+    static const std::map<std::string, double> empty_map;
     if (document_id < 0 || documents_.count(document_id) == 0) {
-        return {};
+        return empty_map;
     }
     return document_to_word_freqs_.at(document_id);
 }
@@ -77,7 +74,7 @@ int SearchServer::GetDocumentCount() const {
 
 // Получить кортеж из слов и статуса документа по запросу.
 std::tuple<std::vector<std::string>, DocumentStatus> SearchServer::MatchDocument(const std::string &raw_query,
-                                                    int document_id) const {
+                                                                                 int document_id) const {
     const auto query = ParseQuery(raw_query);
 
     std::vector<std::string> matched_words;
@@ -176,10 +173,10 @@ double SearchServer::ComputeWordInverseDocumentFreq(const std::string &word) con
 // Выводит результаты в консоль
 void PrintMatchDocumentResult(int document_id, const std::vector<std::string> &words, DocumentStatus status) {
     std::cout << "{ "
-         << "document_id = " << document_id << ", "
-         << "status = " << static_cast<int>(status) << ", "
-         << "words =";
-    for (std::string word : words) {
+              << "document_id = " << document_id << ", "
+              << "status = " << static_cast<int>(status) << ", "
+              << "words =";
+    for (std::string word: words) {
         std::cout << ' ' << word;
     }
     std::cout << "}" << std::endl;
@@ -188,8 +185,8 @@ void PrintMatchDocumentResult(int document_id, const std::vector<std::string> &w
 // Выводит результаты в консоль
 void PrintDocument(const Document &document) {
     std::cout << "{ "
-         << "document_id = " << document.id << ", "
-         << "relevance = " << document.relevance << ", "
-         << "rating = " << document.rating
-         << " }" << std::endl;
+              << "document_id = " << document.id << ", "
+              << "relevance = " << document.relevance << ", "
+              << "rating = " << document.rating
+              << " }" << std::endl;
 }
