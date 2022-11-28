@@ -7,6 +7,15 @@ SearchServer::SearchServer(const std::string &stop_words_text)
 {
 }
 
+std::set<int>::iterator SearchServer::begin() const {
+    return document_ids_.begin();
+}
+
+std::set<int>::iterator SearchServer::end() const {
+    return document_ids_.end();
+}
+
+// Добавление нового документа.
 void SearchServer::AddDocument(int document_id, const std::string &document, DocumentStatus status,
                  const std::vector<int> &ratings) {
     if ((document_id < 0) || (documents_.count(document_id) > 0)) {
@@ -17,11 +26,30 @@ void SearchServer::AddDocument(int document_id, const std::string &document, Doc
     const double inv_word_count = 1.0 / words.size();
     for (const std::string &word: words) {
         word_to_document_freqs_[word][document_id] += inv_word_count;
+        document_to_word_freqs_[document_id][word] += inv_word_count;
     }
     documents_.emplace(document_id, DocumentData{ComputeAverageRating(ratings), status});
-    document_ids_.push_back(document_id);
+    document_ids_.insert(document_id);
 }
 
+// Удаление документа по ID.
+void SearchServer::RemoveDocument(int document_id) {
+    if (document_ids_.count(document_id) == 0) {
+        return;
+    }
+
+    for (auto& [word, id_and_idf]: word_to_document_freqs_) {
+        auto find_word = id_and_idf.find(document_id);
+        if (find_word != id_and_idf.end()) {
+            word_to_document_freqs_.at(word).erase(document_id);
+        }
+    }
+    documents_.erase(document_id);
+    document_ids_.erase(document_id);
+    document_to_word_freqs_.erase(document_id);
+}
+
+// Поиск документов по запросу + статусу.
 std::vector<Document> SearchServer::FindTopDocuments(const std::string &raw_query, DocumentStatus status) const {
     return FindTopDocuments(
             raw_query, [status](int document_id, DocumentStatus document_status, int rating) {
@@ -29,18 +57,25 @@ std::vector<Document> SearchServer::FindTopDocuments(const std::string &raw_quer
             });
 }
 
+// Поиск документов по запросу
 std::vector<Document> SearchServer::FindTopDocuments(const std::string &raw_query) const {
     return FindTopDocuments(raw_query, DocumentStatus::ACTUAL);
 }
 
+// Метод получения частот слов по id документа.
+std::map<std::string , double> SearchServer::GetWordFrequencies(int document_id) const {
+    if (document_id < 0 || documents_.count(document_id) == 0) {
+        return {};
+    }
+    return document_to_word_freqs_.at(document_id);
+}
+
+// Получение кол-ва документов.
 int SearchServer::GetDocumentCount() const {
     return documents_.size();
 }
 
-int SearchServer::GetDocumentId(int index) const {
-    return document_ids_.at(index);
-}
-
+// Получить кортеж из слов и статуса документа по запросу.
 std::tuple<std::vector<std::string>, DocumentStatus> SearchServer::MatchDocument(const std::string &raw_query,
                                                     int document_id) const {
     const auto query = ParseQuery(raw_query);
@@ -66,6 +101,7 @@ std::tuple<std::vector<std::string>, DocumentStatus> SearchServer::MatchDocument
     return {matched_words, documents_.at(document_id).status};
 }
 
+// возвращает кортеж из общих слов и статуса документа по запросу
 bool SearchServer::IsStopWord(const std::string &word) const {
     return stop_words_.count(word) > 0;
 }
@@ -132,6 +168,28 @@ SearchServer::Query SearchServer::ParseQuery(const std::string &text) const {
     return result;
 }
 
+// Подсчитывает TF-IDF
 double SearchServer::ComputeWordInverseDocumentFreq(const std::string &word) const {
     return log(GetDocumentCount() * 1.0 / word_to_document_freqs_.at(word).size());
+}
+
+// Выводит результаты в консоль
+void PrintMatchDocumentResult(int document_id, const std::vector<std::string> &words, DocumentStatus status) {
+    std::cout << "{ "
+         << "document_id = " << document_id << ", "
+         << "status = " << static_cast<int>(status) << ", "
+         << "words =";
+    for (std::string word : words) {
+        std::cout << ' ' << word;
+    }
+    std::cout << "}" << std::endl;
+}
+
+// Выводит результаты в консоль
+void PrintDocument(const Document &document) {
+    std::cout << "{ "
+         << "document_id = " << document.id << ", "
+         << "relevance = " << document.relevance << ", "
+         << "rating = " << document.rating
+         << " }" << std::endl;
 }

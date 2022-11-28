@@ -11,14 +11,23 @@
 
 class SearchServer {
 public:
+    // Конструкторы
     template<typename StringContainer>
     explicit SearchServer(const StringContainer &stop_words);
-
     explicit SearchServer(const std::string &stop_words_text);
 
+    // Добавит документ
     void AddDocument(int document_id, const std::string &document, DocumentStatus status,
                      const std::vector<int> &ratings);
 
+    // Удаление документа
+    void RemoveDocument(int document_id);
+
+    // Итераторы по id-s документов в сервере
+    std::set<int>::iterator begin() const;
+    std::set<int>::iterator end() const;
+
+    // Поиск документов по запросу
     template<typename DocumentPredicate>
     std::vector<Document> FindTopDocuments(const std::string &raw_query,
                                       DocumentPredicate document_predicate) const;
@@ -29,20 +38,23 @@ public:
 
     int GetDocumentCount() const;
 
-    int GetDocumentId(int index) const;
-
+    // Общие слова и статусы документов по ID
     std::tuple<std::vector<std::string>, DocumentStatus> MatchDocument(const std::string &raw_query,
                                                         int document_id) const;
+    // Метод получения частот слов по id документа.
+    std::map<std::string, double> GetWordFrequencies(int document_id) const;
 
 private:
+    // Структура хранения документов
     struct DocumentData {
         int rating;
         DocumentStatus status;
     };
-    const std::set<std::string> stop_words_;
-    std::map<std::string, std::map<int, double>> word_to_document_freqs_;
-    std::map<int, DocumentData> documents_;
-    std::vector<int> document_ids_;
+    const std::set<std::string> stop_words_; // Множество стоп слов.
+    std::map<std::string, std::map<int, double>> word_to_document_freqs_; // Словарь: Слово - ID, IDF
+    std::map<int, std::map<std::string , double>> document_to_word_freqs_; // Словарь: ID - Слово, IDF
+    std::map<int, DocumentData> documents_; // Словарь ID добавленных документов и структура данных
+    std::set<int> document_ids_; // все добавленные ID документов
 
     bool IsStopWord(const std::string &word) const;
 
@@ -138,3 +150,7 @@ std::vector<Document> SearchServer::FindAllDocuments(const Query &query,
     }
     return matched_documents;
 }
+
+// Выводит результаты в консоль
+void PrintMatchDocumentResult(int document_id, const std::vector<std::string> &words, DocumentStatus status);
+void PrintDocument(const Document &document);

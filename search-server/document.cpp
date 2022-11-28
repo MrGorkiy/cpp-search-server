@@ -2,6 +2,7 @@
 
 using namespace std;
 
+// Перегрузка оператора <<
 ostream& operator<<(ostream& out, const Document& document) {
     out << "{ "s
         << "document_id = "s << document.id << ", "s
