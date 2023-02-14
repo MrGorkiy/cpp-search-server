@@ -14,6 +14,7 @@ public:
     // Конструкторы
     template<typename StringContainer>
     explicit SearchServer(const StringContainer &stop_words);
+
     explicit SearchServer(const std::string &stop_words_text);
 
     // Добавит документ
@@ -22,17 +23,20 @@ public:
 
     // Удаление документа
     void RemoveDocument(int document_id);
+
     void RemoveDocument(const std::execution::parallel_policy &, int document_id);
-    void RemoveDocument(const std::execution::sequenced_policy &, int document_id);
+
+    void RemoveDocument(const std::execution::sequenced_policy &policy, int document_id);
 
     // Итераторы по id-s документов в сервере
     std::set<int>::iterator begin() const;
+
     std::set<int>::iterator end() const;
 
     // Поиск документов по запросу
     template<typename DocumentPredicate>
     std::vector<Document> FindTopDocuments(const std::string &raw_query,
-                                      DocumentPredicate document_predicate) const;
+                                           DocumentPredicate document_predicate) const;
 
     std::vector<Document> FindTopDocuments(const std::string &raw_query, DocumentStatus status) const;
 
@@ -42,9 +46,10 @@ public:
 
     // Общие слова и статусы документов по ID
     std::tuple<std::vector<std::string>, DocumentStatus> MatchDocument(const std::string &raw_query,
-                                                        int document_id) const;
+                                                                       int document_id) const;
+
     // Метод получения частот слов по id документа.
-    const std::map<std::string, double>& GetWordFrequencies(int document_id) const;
+    const std::map<std::string, double> &GetWordFrequencies(int document_id) const;
 
 private:
     // Структура хранения документов
@@ -54,7 +59,7 @@ private:
     };
     const std::set<std::string> stop_words_; // Множество стоп слов.
     std::map<std::string, std::map<int, double>> word_to_document_freqs_; // Словарь: Слово - ID, IDF
-    std::map<int, std::map<std::string , double>> document_to_word_freqs_; // Словарь: ID - Слово, IDF
+    std::map<int, std::map<std::string, double>> document_to_word_freqs_; // Словарь: ID - Слово, IDF
     std::map<int, DocumentData> documents_; // Словарь ID добавленных документов и структура данных
     std::set<int> document_ids_; // все добавленные ID документов
 
@@ -85,13 +90,12 @@ private:
 
     template<typename DocumentPredicate>
     std::vector<Document> FindAllDocuments(const Query &query,
-                                      DocumentPredicate document_predicate) const;
+                                           DocumentPredicate document_predicate) const;
 };
 
 template<typename StringContainer>
 SearchServer::SearchServer(const StringContainer &stop_words)
-        : stop_words_(MakeUniqueNonEmptyStrings(stop_words))
-{
+        : stop_words_(MakeUniqueNonEmptyStrings(stop_words)) {
     if (!all_of(stop_words_.begin(), stop_words_.end(), IsValidWord)) {
         throw std::invalid_argument("Some of stop words are invalid");
     }
@@ -99,7 +103,7 @@ SearchServer::SearchServer(const StringContainer &stop_words)
 
 template<typename DocumentPredicate>
 std::vector<Document> SearchServer::FindTopDocuments(const std::string &raw_query,
-                                  DocumentPredicate document_predicate) const {
+                                                     DocumentPredicate document_predicate) const {
     const auto query = ParseQuery(raw_query);
 
     auto matched_documents = FindAllDocuments(query, document_predicate);
@@ -121,7 +125,7 @@ std::vector<Document> SearchServer::FindTopDocuments(const std::string &raw_quer
 
 template<typename DocumentPredicate>
 std::vector<Document> SearchServer::FindAllDocuments(const Query &query,
-                                  DocumentPredicate document_predicate) const {
+                                                     DocumentPredicate document_predicate) const {
     std::map<int, double> document_to_relevance;
     for (const std::string &word: query.plus_words) {
         if (word_to_document_freqs_.count(word) == 0) {
@@ -155,4 +159,5 @@ std::vector<Document> SearchServer::FindAllDocuments(const Query &query,
 
 // Выводит результаты в консоль
 void PrintMatchDocumentResult(int document_id, const std::vector<std::string> &words, DocumentStatus status);
+
 void PrintDocument(const Document &document);

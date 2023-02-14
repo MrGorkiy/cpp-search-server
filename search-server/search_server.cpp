@@ -33,43 +33,36 @@ void SearchServer::AddDocument(int document_id, const std::string &document, Doc
 
 // Удаление документа по ID.
 void SearchServer::RemoveDocument(int document_id) {
-    if (document_ids_.count(document_id) == 0) {
+    SearchServer::RemoveDocument(std::execution::seq, document_id);
+}
+
+void SearchServer::RemoveDocument(const std::execution::sequenced_policy&, int document_id) {
+    auto check = document_ids_.find(document_id);
+    if (check == document_ids_.cend()) {
         return;
     }
-    std::map<std::string, double> words_doc = document_to_word_freqs_.at(document_id);
-    for (auto &[word, idf]: words_doc) {
-        word_to_document_freqs_.at(word).erase(document_id);
-    }
     documents_.erase(document_id);
-    document_ids_.erase(document_id);
+    document_ids_.erase(check);
+    for (const auto& [RemoveData, Freqs] : document_to_word_freqs_[document_id]) {
+        word_to_document_freqs_[RemoveData].erase(document_id);
+    }
     document_to_word_freqs_.erase(document_id);
 }
 
-void SearchServer::RemoveDocument(const std::execution::parallel_policy &, int document_id) {
-    if (document_ids_.count(document_id) == 0) {
-        return;
-    }
-
-    const auto &it = document_to_word_freqs_.at(document_id);
-    std::vector<std::string> words(it.size());
-
-    std::transform(std::execution::par, it.begin(), it.end(), words.begin(), [](const auto &element) {
-        return element.first;
-    });
-
-    std::for_each(std::execution::par, words.begin(), words.end(), [&](const std::string word) {
-        word_to_document_freqs_.at(word).erase(document_id);
-        return word;
-    });
-
-    document_to_word_freqs_.erase(document_id);
-    document_ids_.erase(document_id);
+void SearchServer::RemoveDocument(const std::execution::parallel_policy&, int document_id) {
+    if (!document_ids_.count(document_id)) return;
     documents_.erase(document_id);
-
-}
-
-void SearchServer::RemoveDocument(const std::execution::sequenced_policy &, int document_id) {
-    SearchServer::RemoveDocument(document_id);
+    document_ids_.erase(document_id);
+    auto documents_remove = move(document_to_word_freqs_.at(document_id));
+    std::vector <std::string> tmp(documents_remove.size());
+    transform(std::execution::par, documents_remove.begin(), documents_remove.end(), tmp.begin(),
+              [](auto f) {
+                  return f.first;
+              });
+    for_each(std::execution::par, tmp.begin(), tmp.end(),
+             [this, document_id](auto word) {
+                 word_to_document_freqs_.at(word).erase(document_id);
+                 return; });
 }
 
 // Поиск документов по запросу + статусу.
