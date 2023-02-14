@@ -20,4 +20,7 @@ add_executable(cpp_search_server
         search-server/test_example_functions.cpp
         search-server/test_example_functions.h
         search-server/remove_duplicates.cpp
-        search-server/remove_duplicates.h)
+        search-server/remove_duplicates.h
+        search-server/process_queries.cpp
+        search-server/process_queries.h
+        )

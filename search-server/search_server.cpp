@@ -45,6 +45,33 @@ void SearchServer::RemoveDocument(int document_id) {
     document_to_word_freqs_.erase(document_id);
 }
 
+void SearchServer::RemoveDocument(const std::execution::parallel_policy &, int document_id) {
+    if (document_ids_.count(document_id) == 0) {
+        return;
+    }
+
+    const auto &it = document_to_word_freqs_.at(document_id);
+    std::vector<std::string> words(it.size());
+
+    std::transform(std::execution::par, it.begin(), it.end(), words.begin(), [](const auto &element) {
+        return element.first;
+    });
+
+    std::for_each(std::execution::par, words.begin(), words.end(), [&](const std::string word) {
+        word_to_document_freqs_.at(word).erase(document_id);
+        return word;
+    });
+
+    document_to_word_freqs_.erase(document_id);
+    document_ids_.erase(document_id);
+    documents_.erase(document_id);
+
+}
+
+void SearchServer::RemoveDocument(const std::execution::sequenced_policy &, int document_id) {
+    SearchServer::RemoveDocument(document_id);
+}
+
 // Поиск документов по запросу + статусу.
 std::vector<Document> SearchServer::FindTopDocuments(const std::string &raw_query, DocumentStatus status) const {
     return FindTopDocuments(

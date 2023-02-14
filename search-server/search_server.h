@@ -22,6 +22,8 @@ public:
 
     // Удаление документа
     void RemoveDocument(int document_id);
+    void RemoveDocument(const std::execution::parallel_policy &, int document_id);
+    void RemoveDocument(const std::execution::sequenced_policy &, int document_id);
 
     // Итераторы по id-s документов в сервере
     std::set<int>::iterator begin() const;

@@ -1,4 +1,5 @@
 #include "search_server.h"
+#include "process_queries.h"
 #include "paginator.h"
 #include "request_queue.h"
 #include "remove_duplicates.h"
@@ -10,72 +11,158 @@
 #include <string>
 #include <vector>
 
-int main() {
-    std::vector<std::string> stop_words = {"and", "with"};
-    SearchServer search_server(stop_words);
-//    RequestQueue request_queue(search_server);
-//    search_server.AddDocument(1, "curly cat curly tail", DocumentStatus::ACTUAL, {7, 2, 7});
-//    search_server.AddDocument(2, "curly dog and fancy collar", DocumentStatus::ACTUAL, {1, 2, 3});
-//    search_server.AddDocument(3, "big cat fancy collar ", DocumentStatus::ACTUAL, {1, 2, 8});
-//    search_server.AddDocument(4, "big dog sparrow Eugene", DocumentStatus::ACTUAL, {1, 3, 2});
-//    search_server.AddDocument(5, "big dog sparrow Vasiliy", DocumentStatus::ACTUAL, {1, 1, 1});
-//    // 1439 запросов с нулевым результатом
-//    {
-//        for (int i = 0; i < 1439; ++i) {
-//            request_queue.AddFindRequest("empty request");
-//        }
-//        // все еще 1439 запросов с нулевым результатом
-//        request_queue.AddFindRequest("curly dog");
-//        // новые сутки, первый запрос удален, 1438 запросов с нулевым результатом
-//        request_queue.AddFindRequest("big collar");
-//        // первый запрос удален, 1437 запросов с нулевым результатом
-//        request_queue.AddFindRequest("sparrow");
-//        std::cout << "Total empty requests: " << request_queue.GetNoResultRequests() << std::endl;
-//    }
-//    {
-//        std::cout << "[------DOG------]" << std::endl;
-//        search_server.RemoveDocument(5);
-//        auto find = search_server.FindTopDocuments("dog Eugene");
-//        for (auto& n: find) {
-//            std::cout << n << std::endl;
-//        }
-//    }
-//    {
-//        std::cout << "[------CAT------]" << std::endl;
-//        auto find = search_server.FindTopDocuments("cat fancy");
-//        for (auto& n: find) {
-//            std::cout << n << std::endl;
-//        }
-//    }
-    {
-        LOG_DURATION("server");
-        search_server.AddDocument(1, "funny pet and nasty rat", DocumentStatus::ACTUAL, {7, 2, 7});
-        search_server.AddDocument(2, "funny pet with curly hair", DocumentStatus::ACTUAL, {1, 2});
+using namespace std::string_literals;
 
-        // дубликат документа 2, будет удалён
-        search_server.AddDocument(3, "funny pet with curly hair", DocumentStatus::ACTUAL, {1, 2});
-
-        // отличие только в стоп-словах, считаем дубликатом
-        search_server.AddDocument(4, "funny pet and curly hair", DocumentStatus::ACTUAL, {1, 2});
-
-        // множество слов такое же, считаем дубликатом документа 1
-        search_server.AddDocument(5, "funny funny pet and nasty nasty rat", DocumentStatus::ACTUAL, {1, 2});
-
-        // добавились новые слова, дубликатом не является
-        search_server.AddDocument(6, "funny pet and not very nasty rat", DocumentStatus::ACTUAL, {1, 2});
-
-        // множество слов такое же, как в id 6, несмотря на другой порядок, считаем дубликатом
-        search_server.AddDocument(7, "very nasty rat and not very funny pet", DocumentStatus::ACTUAL, {1, 2});
-
-        // есть не все слова, не является дубликатом
-        search_server.AddDocument(8, "pet with rat and rat and rat", DocumentStatus::ACTUAL, {1, 2});
-
-        // слова из разных документов, не является дубликатом
-        search_server.AddDocument(9, "nasty rat with curly hair", DocumentStatus::ACTUAL, {1, 2});
-
-        std::cout << "Before duplicates removed: " << search_server.GetDocumentCount() << std::endl;
-        RemoveDuplicates(search_server);
-        std::cout << "After duplicates removed: " << search_server.GetDocumentCount() << std::endl;
+std::string GenerateWord(std::mt19937& generator, int max_length) {
+    const int length = std::uniform_int_distribution(1, max_length)(generator);
+    std::string word;
+    word.reserve(length);
+    for (int i = 0; i < length; ++i) {
+        word.push_back(std::uniform_int_distribution('a', 'z')(generator));
     }
-    return 0;
+    return word;
+}
+std::vector<std::string> GenerateDictionary(std::mt19937& generator,
+                                            int word_count, int max_length) {
+    std::vector<std::string> words;
+    words.reserve(word_count);
+    for (int i = 0; i < word_count; ++i) {
+        words.push_back(GenerateWord(generator, max_length));
+    }
+    sort(words.begin(), words.end());
+    words.erase(unique(words.begin(), words.end()), words.end());
+    return words;
+}
+std::string GenerateQuery(std::mt19937& generator,
+                          const std::vector<std::string>& dictionary,
+                          int max_word_count) {
+    const int word_count = std::uniform_int_distribution(1, max_word_count)(generator);
+    std::string query;
+    for (int i = 0; i < word_count; ++i) {
+        if (!query.empty()) {
+            query.push_back(' ');
+        }
+        query += dictionary[std::uniform_int_distribution<int>(0, dictionary.size() - 1)(generator)];
+    }
+    return query;
+}
+std::vector<std::string> GenerateQueries(std::mt19937& generator,
+                                         const std::vector<std::string>& dictionary,
+                                         int query_count, int max_word_count) {
+    std::vector<std::string> queries;
+    queries.reserve(query_count);
+    for (int i = 0; i < query_count; ++i) {
+        queries.push_back(GenerateQuery(generator, dictionary, max_word_count));
+    }
+    return queries;
+}
+template <typename QueriesProcessor>
+void Test(std::string_view mark,
+          QueriesProcessor processor,
+          const SearchServer& search_server,
+          const std::vector<std::string>& queries) {
+    LOG_DURATION(mark);
+    const auto documents_lists = processor(search_server, queries);
+}
+#define TEST(processor) Test(#processor, processor, search_server, queries)
+
+
+int main() {
+    {
+        std::mt19937 generator;
+        const auto dictionary = GenerateDictionary(generator, 2'000, 25);
+        const auto documents = GenerateQueries(generator, dictionary, 20'000, 10);
+        SearchServer search_server(dictionary[0]);
+        for (size_t i = 0; i < documents.size(); ++i) {
+            search_server.AddDocument(i, documents[i], DocumentStatus::ACTUAL, {1, 2, 3});
+        }
+        const auto queries = GenerateQueries(generator, dictionary, 2'000, 7);
+        TEST(ProcessQueries);
+    }
+
+    {
+        SearchServer search_server("and with"s);
+        int id = 0;
+        for (
+            const std::string &text: {
+                "funny pet and nasty rat"s,
+                "funny pet with curly hair"s,
+                "funny pet and not very nasty rat"s,
+                "pet with rat and rat and rat"s,
+                "nasty rat with curly hair"s,
+        }
+                ) {
+            search_server.AddDocument(++id, text, DocumentStatus::ACTUAL, {1, 2});
+        }
+        const std::vector<std::string> queries = {
+                "nasty rat -not"s,
+                "not very funny nasty pet"s,
+                "curly hair"s
+        };
+        id = 0;
+        for (
+            const auto &documents: ProcessQueries(search_server, queries)
+                ) {
+            std::cout << documents.size() << " documents for query ["s << queries[id++] << "]"s << std::endl;
+        }
+    }
+
+    {
+        SearchServer search_server("and with"s);
+        int id = 0;
+        for (
+            const std::string& text : {
+                "funny pet and nasty rat"s,
+                "funny pet with curly hair"s,
+                "funny pet and not very nasty rat"s,
+                "pet with rat and rat and rat"s,
+                "nasty rat with curly hair"s,
+        }
+                ) {
+            search_server.AddDocument(++id, text, DocumentStatus::ACTUAL, {1, 2});
+        }
+        const std::vector<std::string> queries = {
+                "nasty rat -not"s,
+                "not very funny nasty pet"s,
+                "curly hair"s
+        };
+        for (const Document& document : ProcessQueriesJoined(search_server, queries)) {
+            std::cout << "Document "s << document.id << " matched with relevance "s << document.relevance << std::endl;
+        }
+    }
+
+    {
+        SearchServer search_server("and with"s);
+
+        int id = 0;
+        for (
+            const std::string& text : {
+                "funny pet and nasty rat"s,
+                "funny pet with curly hair"s,
+                "funny pet and not very nasty rat"s,
+                "pet with rat and rat and rat"s,
+                "nasty rat with curly hair"s,
+        }
+                ) {
+            search_server.AddDocument(++id, text, DocumentStatus::ACTUAL, {1, 2});
+        }
+
+        const std::string query = "curly and funny"s;
+
+        auto report = [&search_server, &query] {
+            std::cout << search_server.GetDocumentCount() << " documents total, "s
+                 << search_server.FindTopDocuments(query).size() << " documents for query ["s << query << "]"s << std::endl;
+        };
+
+        report();
+        // однопоточная версия
+        search_server.RemoveDocument(5);
+        report();
+        // однопоточная версия
+        search_server.RemoveDocument(std::execution::seq, 1);
+        report();
+        // многопоточная версия
+        search_server.RemoveDocument(std::execution::par, 2);
+        report();
+    }
 }
