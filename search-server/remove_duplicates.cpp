@@ -3,11 +3,11 @@
 #include <iostream>
 
 void RemoveDuplicates(SearchServer &search_server) {
-    std::map<std::set<std::string>, int> word_to_document_freqs; // Множество слов и ID документа
+    std::map<std::set<std::string_view>, int> word_to_document_freqs; // Множество слов и ID документа
     std::set<int> id_delete_doc; // Множество ID дубликатов для удаления
 
     for (const int document_id: search_server) {
-        std::set<std::string> words; // Множество слов
+        std::set<std::string_view> words; // Множество слов
         for (auto &[doc, id_and_idf]: search_server.GetWordFrequencies(document_id)) {
             words.insert(doc);
         }
