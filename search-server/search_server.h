@@ -10,6 +10,8 @@
 #include "string_processing.h"
 #include "concurrent_map.h"
 
+inline static constexpr double EPSILON = 1e-6;
+
 class SearchServer {
 public:
     // Конструкторы
@@ -168,7 +170,7 @@ std::vector<Document> SearchServer::FindTopDocuments(ExecutionPolicy &&policy, c
     sort(policy,
          matched_documents.begin(), matched_documents.end(),
          [](const Document &lhs, const Document &rhs) {
-             if (std::abs(lhs.relevance - rhs.relevance) < 1e-6) {
+             if (std::abs(lhs.relevance - rhs.relevance) < EPSILON) {
                  return lhs.rating > rhs.rating;
              } else {
                  return lhs.relevance > rhs.relevance;
