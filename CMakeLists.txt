@@ -23,4 +23,5 @@ add_executable(cpp_search_server
         search-server/remove_duplicates.h
         search-server/process_queries.cpp
         search-server/process_queries.h
+        search-server/test_framework.h
         )

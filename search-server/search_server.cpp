@@ -47,16 +47,16 @@ void SearchServer::RemoveDocument(int document_id) {
 }
 
 // Поиск документов по запросу + статусу.
-std::vector<Document> SearchServer::FindTopDocuments(const std::string &raw_query, DocumentStatus status) const {
+std::vector<Document> SearchServer::FindTopDocuments(const std::string_view &raw_query, DocumentStatus status) const {
     return FindTopDocuments(
-            raw_query, [status](int document_id, DocumentStatus document_status, int rating) {
+            std::execution::seq, raw_query, [status](int document_id, DocumentStatus document_status, int rating) {
                 return document_status == status;
             });
 }
 
 // Поиск документов по запросу
-std::vector<Document> SearchServer::FindTopDocuments(const std::string &raw_query) const {
-    return FindTopDocuments(raw_query, DocumentStatus::ACTUAL);
+std::vector<Document> SearchServer::FindTopDocuments(const std::string_view &raw_query) const {
+    return FindTopDocuments(std::execution::seq, raw_query, DocumentStatus::ACTUAL);
 }
 
 // Метод получения частот слов по id документа.
